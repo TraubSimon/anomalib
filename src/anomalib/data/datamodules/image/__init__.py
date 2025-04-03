@@ -31,6 +31,7 @@ from .folder import Folder
 from .kolektor import Kolektor
 from .mvtec import MVTec
 from .visa import Visa
+from .senso_part import SensoPartAD
 
 
 class ImageDataFormat(str, Enum):
@@ -56,6 +57,7 @@ class ImageDataFormat(str, Enum):
     MVTEC = "mvtec"
     MVTEC_3D = "mvtec_3d"
     VISA = "visa"
+    SENSOPART = "senso_part"
 
 
-__all__ = ["BTech", "Datumaro", "Folder", "Kolektor", "MVTec", "Visa"]
+__all__ = ["BTech", "Datumaro", "Folder", "Kolektor", "MVTec", "Visa", "SensoPartAD"]

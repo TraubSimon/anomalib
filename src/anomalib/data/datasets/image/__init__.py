@@ -28,6 +28,7 @@ from .folder import FolderDataset
 from .kolektor import KolektorDataset
 from .mvtec import MVTecDataset
 from .visa import VisaDataset
+from .senso_part import SensoPartADDataset
 
 __all__ = [
     "BTechDataset",
@@ -36,4 +37,5 @@ __all__ = [
     "KolektorDataset",
     "MVTecDataset",
     "VisaDataset",
+    "SensoPart",
 ]
