@@ -129,6 +129,7 @@ class SensoPartAD(AnomalibDataModule):
         self.root = Path(root)
         self.category = category
         self.sub_category = sub_category
+        self.test_split_ratio = test_split_ratio
         self.num_train_imgs = num_train_imgs
 
     def _setup(self, _stage: str | None = None) -> None:
@@ -149,6 +150,7 @@ class SensoPartAD(AnomalibDataModule):
             root=self.root,
             category=self.category,
             sub_category=self.sub_category,
+            test_split_ratio=self.test_split_ratio,
             num_train_imgs=self.num_train_imgs,
         )
         self.test_data = SensoPartADDataset(
@@ -156,6 +158,8 @@ class SensoPartAD(AnomalibDataModule):
             root=self.root,
             category=self.category,
             sub_category=self.sub_category,
+            test_split_ratio=self.test_split_ratio,
+            num_train_imgs=self.num_train_imgs
         )
 
     def prepare_data(self) -> None:

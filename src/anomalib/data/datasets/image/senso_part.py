@@ -28,6 +28,8 @@ e.g. 2_Anwesenheit_und_Vollstaendigkeit contains
     ]
 """
 import logging
+import pandas as pd
+import math
 from pathlib import Path 
 from collections.abc import Sequence
 from pandas import DataFrame
@@ -93,6 +95,8 @@ class SensoPartADDataset(AnomalibDataset):
         category (str): Categroy name, must be one of ``CATEGORIES`` 
             Defaults to ``2_Anwesenheit_und_Vollstaendigkeit```
         sub_category (str): Subcategory, must be one of ``SUB_CATEGORIES``
+        test_split_ratio (float): Fraction of data to use for testing.
+            Defaults to ``0.2``.
         num_train_imgs (int | None, optional): Limit the number of training images
             Defaults to ``None``
 
@@ -120,6 +124,7 @@ class SensoPartADDataset(AnomalibDataset):
         category: str = "2_Anwesenheit_und_Vollstaendigkeit",
         sub_category: str = "2_1_BMW_Blechmontage",
         split: Split = Split.TRAIN ,
+        test_split_ratio : float = 0.2,
         num_train_imgs: int | None = None,
     ) -> None:
         super().__init__()
@@ -130,10 +135,10 @@ class SensoPartADDataset(AnomalibDataset):
         self.root_category = Path(root) / Path(category)
         self.root_subcategory = Path(root) / Path(category) / Path(sub_category)
         self.num_train_imgs = num_train_imgs
-        logger.info(f"Creating SensoPartAD dataset with category: {category} and sub_category {sub_category}")
         self.samples = make_senso_part_dataset(
             self.root_subcategory, 
             split=self.split,
+            test_split_ratio=test_split_ratio,
             extensions=IMG_EXTENSIONS,
             num_train_imgs=self.num_train_imgs
         )
@@ -141,6 +146,7 @@ class SensoPartADDataset(AnomalibDataset):
 def make_senso_part_dataset(
     root: str | Path, 
     split: Split = Split.TRAIN,
+    test_split_ratio: float = 0.2,
     extensions: Sequence[str] | None = None,
     num_train_imgs: int | None = None,
 ) -> DataFrame:
@@ -155,6 +161,8 @@ def make_senso_part_dataset(
         root (Path | str): Path to dataset root directory
         split (str | Split | None, optional): Dataset split (train or test)
             Defaults to ``None``.
+        test_split_ratio (float): Fraction of data to use for testing.
+            Defaults to ``0.2``.
         extension (Sequence[str] | None, optional): Valid file extension
             Defaults to ``None``.
         num_train_imgs (int | None, optional): Limit the number of training images
@@ -209,19 +217,24 @@ def make_senso_part_dataset(
     samples.loc[(samples.label == "nIO"), "label_index"] = LabelName.ABNORMAL
     samples.label_index = samples.label_index.astype(int)
 
-    # get rid of all anomalous images in the training
-    if split == Split.TRAIN:
-        samples = samples.drop(samples[samples.label_index != LabelName.NORMAL].index)
-        
-        # Limit the number of training samples
-        if num_train_imgs is not None:
-            samples = samples.iloc[0:num_train_imgs]
-            
-        
-    # for testing use only nIO samples as no gt_masks are provided
-    if split == Split.TEST:
-        samples = samples.drop(samples[samples.label_index != LabelName.ABNORMAL].index)
+    # divide into normal ananomalous samples
+    normal_samples = samples.drop(samples[samples.label_index != LabelName.NORMAL].index)
+    anomalous_samples = samples.drop(samples[samples.label_index != LabelName.ABNORMAL].index)
     
-
-    logger.info(f"Return dataset with {len(samples)} samples")
+    # Set ``num_train_imgs`` for splitting the data
+    if num_train_imgs is not None:
+        # check that num_train_images does not exceed number of normal images
+        if len(normal_samples) < num_train_imgs:
+            logger.info(f"Number of normal images in dataset is smaller than 'num_train_imgs'. So set num_train_imgs to {len(normal_samples)}")
+            num_train_imgs = len(normal_samples)    
+    else:
+        # divide normal samples by split ratio 
+        num_train_imgs = math.floor(len(normal_samples) * (1.0 - test_split_ratio))
+    
+    # assign samples to train and test splits    
+    if split == Split.TRAIN:
+        samples = normal_samples.iloc[0:num_train_imgs]
+    elif split == Split.TEST:
+        normal_samples = normal_samples.iloc[num_train_imgs:]
+        samples = pd.concat([normal_samples, anomalous_samples]) 
     return samples
