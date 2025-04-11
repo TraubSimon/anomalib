@@ -76,6 +76,8 @@ class SensoPartAD(AnomalibDataModule):
             Defaults to ``0.5``.
         seed (int | None, optional): Seed for reproducibility.
             Defaults to ``None``.
+        num_train_imgs (int | None, optional): Limit the number of samples used for trainig
+            Defaults to ``None`` 
 
     Example:
         Create SensoPart datamodule with default settings::
@@ -102,11 +104,12 @@ class SensoPartAD(AnomalibDataModule):
         val_augmentations: Transform | None = None,
         test_augmentations: Transform | None = None,
         augmentations: Transform | None = None,
-        test_split_mode: TestSplitMode | str = TestSplitMode.NONE,
+        test_split_mode: TestSplitMode | str = TestSplitMode.FROM_DIR,
         test_split_ratio: float = 0.2,
-        val_split_mode: ValSplitMode | str = ValSplitMode.NONE,
+        val_split_mode: ValSplitMode | str = ValSplitMode.SAME_AS_TEST,
         val_split_ratio: float = 0.5,
         seed: int | None = None,
+        num_train_imgs: int | None = None,
     ) -> None:
         super().__init__(
             train_batch_size=train_batch_size,
@@ -126,6 +129,7 @@ class SensoPartAD(AnomalibDataModule):
         self.root = Path(root)
         self.category = category
         self.sub_category = sub_category
+        self.num_train_imgs = num_train_imgs
 
     def _setup(self, _stage: str | None = None) -> None:
         """Set up the datasets and perform dynamic subset splitting.
@@ -144,12 +148,14 @@ class SensoPartAD(AnomalibDataModule):
             split=Split.TRAIN,
             root=self.root,
             category=self.category,
-            sub_category=self.sub_category
+            sub_category=self.sub_category,
+            num_train_imgs=self.num_train_imgs,
         )
         self.test_data = SensoPartADDataset(
             split=Split.TEST,
             root=self.root,
             category=self.category,
+            sub_category=self.sub_category,
         )
 
     def prepare_data(self) -> None:

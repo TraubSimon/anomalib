@@ -37,7 +37,7 @@ from anomalib.data.datasets.base import AnomalibDataset
 from anomalib.data.errors import MisMatchError
 from anomalib.data.utils import LabelName, Split, validate_path
 
-IMG_EXTENSIONS = (".png", ".PNG")
+IMG_EXTENSIONS = (".png", ".PNG", ".bmp", ".BMP", ".jpg", ".JPG", ".jpeg", ".JPEG")
 CATEGORIES = (
     "bottle",
     "cable",

@@ -27,14 +27,15 @@ e.g. 2_Anwesenheit_und_Vollstaendigkeit contains
         2_8_Weckerle, 
     ]
 """
-
+import logging
 from pathlib import Path 
 from collections.abc import Sequence
 from pandas import DataFrame
 
 from anomalib.data.datasets import AnomalibDataset
-from anomalib.data.utils import LabelName, validate_path
+from anomalib.data.utils import LabelName, validate_path, Split
 
+logger = logging.getLogger(__name__)
 
 IMG_EXTENSIONS = (".png", ".PNG", ".bmp", ".BMP", ".jpg", ".JPG",  ".jpeg",  ".JPEG")
 CATEGORIES = (
@@ -46,7 +47,44 @@ CATEGORIES = (
     "7_Bauch_Ruecken",
 )
 
-class SensoPartDataset(AnomalibDataset):
+SUB_CATEGORIES = (
+    '2_1_BMW_Blechmontage', 
+    '2_2_Presence_O-Ring', 
+    '2_3_BMW-USA_Schweissnaht', 
+    '2_4_SP-USA_WeldSeam_presence', 
+    '2_5_Zahoransky_Completeness_MP', 
+    '2_6_BMW_MUC_Band50ST150Heber05_Kettenkontrolle_li', 
+    '2_7_BMW_MUC_Band50ST150Heber05_Kettenkontrolle_re', 
+    '2_8_Weckerle', 
+    '13_Tuben', 
+    '3_1_Tritecnica_Colored_pen', 
+    '3_2_DAIMLER_Pyro', 
+    '3_3_WeilEN_Rohre_', 
+    '3_4_KrausMaffeySchweden_ARu', 
+    '3_5_DAIMLER_Steuereinheit_Positionierung', 
+    '3_6_BMW-USA_Montagepruefung'
+    '4_1_CJa_Hengst'
+    '5_1_SP_FR_Print1', 
+    '5_1_SP_FR_Print2', 
+    '5_2_Tritecnica_Electric_contacts', 
+    '5_3_SP_FR_42', 
+    '5_4_Tritecnica_aerosol', 
+    '5_5_Tritecnica_cable_cam35', 
+    '5_6_BMW_Gummidichtung_LoecherTHD_G02_12-04-23', 
+    '5_7_ARu AUDI Griffe', 
+    '5_8_DAIMLER_Pyrosicherung'
+    '6_1_Kunstleder_Diss_KBE', 
+    '6_2_BMW_MetalNut', 
+    '6_3_curaprox_ARu_Druck_close', 
+    '6_4_curaprox_ARu_Druck_c', 
+    '6_5_Hella_PlasticBurn', 
+    '6_6_Steatit-Bruch', 
+    '6_7_SPKorea_Welding',
+    '7_1_SP_FR_41', 
+    '7_2_SensoPart_Zufuehrung_Kunststoffteil',
+)
+
+class SensoPartADDataset(AnomalibDataset):
     """SensoPart dataset class.
     
     Args: 
@@ -55,13 +93,16 @@ class SensoPartDataset(AnomalibDataset):
         category (str): Categroy name, must be one of ``CATEGORIES`` 
             Defaults to ``2_Anwesenheit_und_Vollstaendigkeit```
         sub_category (str): Subcategory, must be one of ``SUB_CATEGORIES``
+        num_train_imgs (int | None, optional): Limit the number of training images
+            Defaults to ``None``
 
     Example: 
         >>> from pathlib import Path
-        >>> from anomalib.data.datasets import SensoPartDataset
-        >>> dataset = SensoPartDataset(
+        >>> from anomalib.data.datasets import SensoPartADDataset
+        >>> dataset = SensoPartADDataset(
         ...     root=Path("./dataset/SensoPartAD"),
         ...     category="2_Anwesenheit_und_Vollstaendigkeit", 
+        ...     sub_category="2_1_BMW_Blechmontage",
         ... )
 
         # For classification tasks each sample contains:
@@ -78,25 +119,37 @@ class SensoPartDataset(AnomalibDataset):
         root: Path | str = "./datasets/SensoPartAD", 
         category: str = "2_Anwesenheit_und_Vollstaendigkeit",
         sub_category: str = "2_1_BMW_Blechmontage",
+        split: Split = Split.TRAIN ,
+        num_train_imgs: int | None = None,
     ) -> None:
         super().__init__()
 
-        self.root_category = Path(root) / Path(category)
         self.category = category
+        self.split = split
         self.sub_category = sub_category
-        self.sample = make_senso_part_dataset(
-            self.root_category, 
-            extensions=IMG_EXTENSIONS
+        self.root_category = Path(root) / Path(category)
+        self.root_subcategory = Path(root) / Path(category) / Path(sub_category)
+        self.num_train_imgs = num_train_imgs
+        logger.info(f"Creating SensoPartAD dataset with category: {category} and sub_category {sub_category}")
+        self.samples = make_senso_part_dataset(
+            self.root_subcategory, 
+            split=self.split,
+            extensions=IMG_EXTENSIONS,
+            num_train_imgs=self.num_train_imgs
         )
 
 def make_senso_part_dataset(
     root: str | Path, 
-    extension: Sequence[str] | None = None,
+    split: Split = Split.TRAIN,
+    extensions: Sequence[str] | None = None,
+    num_train_imgs: int | None = None,
 ) -> DataFrame:
     """Create SensoPart AD samples by parsing the data directory structure.
 
     The files are expected to follow the structure:
-        ``path/to/dataset//category/image_filename.png``
+        ``path/to/dataset//category/sub_category/IO/image_filename.png``
+        ``path/to/dataset//category/sub_category/nIO/image_filename.png``
+        
 
     Args:
         root (Path | str): Path to dataset root directory
@@ -104,6 +157,8 @@ def make_senso_part_dataset(
             Defaults to ``None``.
         extension (Sequence[str] | None, optional): Valid file extension
             Defaults to ``None``.
+        num_train_imgs (int | None, optional): Limit the number of training images
+            Defaults to ``None``
 
     Returns:
         DataFrame: Dataset samples with columns:
@@ -111,21 +166,62 @@ def make_senso_part_dataset(
             - label: Class label
             - image_path: Path to image file
             - label_index: Numeric label (0=normal, 1=abnormal)
+            - split: Dataset split (train/test)
 
     Example:
         >>> root = Path("./datasets/SensoPartAD")
         >>> category="2_Anwesenheit_und_Vollstaendigkeit"
-        >>> samples = make_mvtec_dataset(root, categrory)
+        >>> sub_category="2_1_BMW_Blechmontage"
+        >>> samples = make_mvtec_dataset(root, categrory, sub_category)
         >>> samples.head()
-           path                                                    label image_path           label_index
-        0  datasets/SensoPartAD/2_Anwesenheit_und_Vollstaendigkeit OK    [...]/good/105.png   0
-        1  datasets/SensoPartAD/2_Anwesenheit_und_Vollstaendigkeit OK    [...]/good/017.png   0
+           path                                                                             label image_path         label_index
+        0  datasets/SensoPartAD/2_Anwesenheit_und_Vollstaendigkeit/2_1_BMW_Blechmontage/    OK    [...]/IO/105.png   0
+        1  datasets/SensoPartAD/2_Anwesenheit_und_Vollstaendigkeit/2_1_BMW_Blechmontage/    OK    [...]/IO/017.png   0
 
     Raises:
         RuntimeError: If no valid images are found
     """
-    if extension is None:
-        extension = IMG_EXTENSIONS
+    if extensions is None:
+        extensions = IMG_EXTENSIONS
     
     root = validate_path(root)
 
+    sample_list = [(str(root),) + f.parts[-2:] for f in root.glob(r"**/*") if f.suffix in extensions]
+    if not sample_list:
+        msg = f"Found 0 images in {root}"
+        raise RuntimeError(msg) 
+    
+    samples = DataFrame(
+        sample_list, columns=["path", "label", "image_path"]
+    )
+
+    # Modify by converting the path to an absolute path
+    samples["image_path"] = samples["path"] + "/" + samples["label"] + "/" + samples["image_path"]
+    samples["split"] = split
+    samples["mask_path"] = ""
+    
+    
+    # infer the task type
+    samples.attrs["task"] = "classification" if (samples["mask_path"] == "").all() else "segmentation"
+       
+    # create labels for noraml(0) and abnormal(1) images.
+    samples.loc[(samples.label == "IO"), "label_index"] = LabelName.NORMAL
+    samples.loc[(samples.label == "nIO"), "label_index"] = LabelName.ABNORMAL
+    samples.label_index = samples.label_index.astype(int)
+
+    # get rid of all anomalous images in the training
+    if split == Split.TRAIN:
+        samples = samples.drop(samples[samples.label_index != LabelName.NORMAL].index)
+        
+        # Limit the number of training samples
+        if num_train_imgs is not None:
+            samples = samples.iloc[0:num_train_imgs]
+            
+        
+    # for testing use only nIO samples as no gt_masks are provided
+    if split == Split.TEST:
+        samples = samples.drop(samples[samples.label_index != LabelName.ABNORMAL].index)
+    
+
+    logger.info(f"Return dataset with {len(samples)} samples")
+    return samples
