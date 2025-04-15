@@ -235,6 +235,9 @@ def make_senso_part_dataset(
     if split == Split.TRAIN:
         samples = normal_samples.iloc[0:num_train_imgs]
     elif split == Split.TEST:
-        normal_samples = normal_samples.iloc[num_train_imgs:]
-        samples = pd.concat([normal_samples, anomalous_samples]) 
+        if len(normal_samples) > 64: # take first test image with idx=64
+            normal_samples = normal_samples.iloc[64:]
+            samples = pd.concat([normal_samples, anomalous_samples]) 
+        else:
+            samples = anomalous_samples
     return samples
